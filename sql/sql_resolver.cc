@@ -250,9 +250,15 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   is_item_list_lookup = true;
 
   // Precompute and store the row types of NATURAL/USING joins.
-  if (leaf_table_count >= 2 &&
-      setup_natural_join_row_types(thd, join_list, &context))
-    return true;
+  if (leaf_table_count >= 2) {
+    StringBuffer<10240> str;
+    std::string prefix("");
+    print_top_join(&str, prefix);
+    str.append('\0');
+    std::cout<<to_string(str)<<std::endl;
+    if (setup_natural_join_row_types(thd, join_list, &context))
+      return true;
+  }
 
   Mem_root_array<Item_exists_subselect *> sj_candidates_local(thd->mem_root);
   set_sj_candidates(&sj_candidates_local);

@@ -1484,6 +1484,7 @@ class Query_block {
   /// Setup the array containing references to base items
   bool setup_base_ref_items(THD *thd);
   void print(const THD *thd, String *str, enum_query_type query_type);
+  void print_top_join(String *str, std::string &prefix);
 
   /**
     Print detail of the Query_block object.

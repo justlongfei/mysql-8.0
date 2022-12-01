@@ -72,6 +72,7 @@
 #include "sql/system_variables.h"
 #include "sql/table_function.h"
 #include "sql/window.h"
+#include "sql_string.h"
 #include "sql_update.h"  // Sql_cmd_update
 #include "template_utils.h"
 
@@ -2718,6 +2719,51 @@ static void print_table_array(const THD *thd, String *str,
   }
 }
 
+static void print_join_tree(String *str, std::string &prefix, mem_root_deque<TABLE_LIST *> *tables) ;
+
+static void print_tables(String *str, std::string &prefix,
+                             const Table_array &tables) {
+  Table_array::const_iterator it = tables.begin();
+  bool last = false;
+  for (; it != tables.end(); ++it) {
+    last = (it+1 == tables.end());
+    TABLE_LIST *curr = *it;
+    str->append(STRING_WITH_LEN(prefix.c_str()));
+    if (last) {
+      str->append(STRING_WITH_LEN("|_"));
+    } else {
+      str->append(STRING_WITH_LEN("|-"));
+    }
+    str->append(STRING_WITH_LEN(curr->alias));
+    str->append('\n');
+    if (curr->nested_join) {
+      std::string prefix1 = prefix + (last ? "  " : "| ");
+      print_join_tree(str, prefix1, &(curr->nested_join->join_list));
+    }
+  }
+}
+
+static void print_join_tree(String *str, std::string &prefix, mem_root_deque<TABLE_LIST *> *tables) {
+  Table_array tables_to_print(PSI_NOT_INSTRUMENTED);
+
+  for (TABLE_LIST *t : *tables) {
+    // The single table added to fake_query_block has no name;
+    // “from dual” looks slightly better than “from ``”, so drop it.
+    // (The fake_query_block query is invalid either way.)
+    if (t->alias[0] == '\0') continue;
+
+    if (tables_to_print.push_back(t)) return; /* purecov: inspected */
+  }
+
+  if (tables_to_print.empty()) {
+    str->append(STRING_WITH_LEN("dual"));
+    return;  // all tables were optimized away
+  }
+
+  std::reverse(tables_to_print.begin(), tables_to_print.end());
+  print_tables(str, prefix, tables_to_print);
+}
+
 /**
   Print joins from the FROM clause.
 
@@ -2865,6 +2911,10 @@ void TABLE_LIST::print(const THD *thd, String *str,
       }
     }
   }
+}
+
+void Query_block::print_top_join(String *str, std::string &prefix) {
+  print_join_tree(str, prefix, &top_join_list);
 }
 
 void Query_block::print(const THD *thd, String *str,
